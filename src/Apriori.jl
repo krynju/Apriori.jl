@@ -8,6 +8,19 @@ function count_support(data::DataFrame, attrs::Set{Symbol})::Pair{Set{Symbol},In
     attrs => nrow(data[reduce((x, y) -> x .& y, [data[!, attr] .== true for attr in attrs]),:])
 end
 
+
+# to jest wolniejsze od tego wyżej, dziwne xd
+function count_support2(data::DataFrame, attrs::Set{Symbol})::Pair{Set{Symbol},Int64}
+    res = 0
+   
+    for i in eachrow(data)
+        if (all(getindex.(Ref(i), attrs)))
+            res +=1
+        end
+    end
+    attrs => res
+end
+
 # takes a pair of sets and creates an union set containing the elements
 function squash(arr::Array{Set{Symbol},1})
     union(arr[1], arr[2])
