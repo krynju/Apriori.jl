@@ -155,7 +155,7 @@ function apriori_rule_gen(frequent_itemsets::Array{Pair{Set{Symbol},Int64},1}, a
             i += 1
             if (i == length(Z_set) || length(strong_rules) == 0) break end
             
-            Y = filter(x -> length(x) == i, v_squash.(merging(map(x -> x[1][2], strong_rules))))
+            Y = merge_vectors(map(x -> x[1][2], strong_rules))
         end
     end
     all_strong_rules
