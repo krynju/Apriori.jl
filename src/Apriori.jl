@@ -62,7 +62,8 @@ function subset_iteration(infrequent_itemsets, set)
 end
 
 function apriori(data::DataFrame, min_relative_support=0.2, min_confidence=0.3)
-    apriori_rule_gen(apriori_frequent_itemsets(data, min_relative_support), min_confidence)
+    
+    apriori_rule_gen(apriori_frequent_itemsets(data, min_relative_support),propertynames(data), min_confidence)
 end
 
 function apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
@@ -72,13 +73,12 @@ function apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
     infrequent_itemsets = Set{Set{Symbol}}()
 
     attributes = propertynames(data)::Array{Symbol,1}
-
     itemsets = [Set([i]) for i in attributes]::Array{Set{Symbol},1}
 
     while true
         itemsets_w_supp = map(x-> count_support(data,x), itemsets)
         freq_itemsets_w_supp = filter(x -> x[2] >= supp, itemsets_w_supp)
-        !(freq_itemsets, freq_itemsets_w_supp)
+        append!(freq_itemsets, freq_itemsets_w_supp)
         union!(infrequent_itemsets, map(y -> y[1], filter(x -> x[2] < supp, itemsets_w_supp)))
         
         if (length(freq_itemsets_w_supp) <= 1) break end
@@ -128,24 +128,30 @@ function merge_vectors(itemsets)
     return(result)
 end
 
-function apriori_rule_gen(frequent_itemsets::Array{Pair{Set{Symbol},Int64},1}, min_confidence=0.3)
-    df = Dict(frequent_itemsets)
+function translate(element, dict)
+
+end
+
+function apriori_rule_gen(frequent_itemsets::Array{Pair{Set{Symbol},Int64},1}, attribute_names, min_confidence=0.3)
+    s_to_i = Dict([x=>y for (x,y) in zip(attribute_names, 1:length(attribute_names))])
+
+    df = Dict(map(x-> sort(Vector(getindex.(Ref(s_to_i), x[1]))) => x[2],frequent_itemsets))
 
     all_strong_rules = Vector{Pair{Tuple{Vector{Symbol}, Vector{Symbol}},Float64}}()
 
     for (Z_set,Z_sup) in frequent_itemsets
         if (length(Z_set) == 1) continue end
 
-        v_Z_set = sort(Vector{Symbol}([Z_set...]))
+        v_Z_set = sort(Vector{Int64}(getindex.(Ref(s_to_i), Z_set)))
         i = 1
         Y = v_subsets(v_Z_set, i)
         while true
             strong_rules = filter(x -> x[2] >= min_confidence, map(x -> begin
                 ant = v_antecedent(v_Z_set, x)
-                (ant, x) => Z_sup / df[Set(ant)] 
+                (ant, x) => Z_sup / df[ant] 
             end, Y))
             
-            !(all_strong_rules, strong_rules)
+            append!(all_strong_rules, map(x-> (getindex.(Ref(attribute_names),x[1][1]), getindex.(Ref(attribute_names),x[1][2])) => x[2], strong_rules))
             i += 1
             if (i == length(Z_set) || length(strong_rules) == 0) break end
             
@@ -173,7 +179,7 @@ function apriori_rule_gen2(frequent_itemsets::Array{Pair{Set{Symbol},Int64},1}, 
                 (ant, x) => Z_sup / df[Set(ant)] 
             end, Y))
             
-            !(all_strong_rules, strong_rules)
+            append!(all_strong_rules, strong_rules)
             i += 1
             if (i == length(Z_set) || length(strong_rules) == 0) break end
             
