@@ -96,20 +96,35 @@ end
 function merge_vectors(itemsets)
     pool = [itemsets[1]]
     result = []
-    for itemset in itemsets[2:end]
-        if (itemset[1:end-1] != pool[1][1:end-1])
-            prefix = pool[1][1:end-1]
-            suffixes = combinations(vcat(map(x->x[end], pool)),2)
-            append!(result, sort(map(x->vcat(prefix,sort(x)), suffixes)))
-            pool = []
+    for i in 1:length(itemsets)
+        itemset1 = itemsets[i]
+        prefix = itemset1[1:end-1]
+        suffixes = []
+        for j in i+1:length(itemsets)
+            itemset2 = itemsets[j]
+            if prefix != itemset2[1:end-1]
+                break
+            end
+            push!(suffixes, sort([itemset1[end], itemset2[end]]))
         end
-        push!(pool, itemset)
+        suffixes = sort(suffixes)
+        merged_itemsets = map(x->vcat(prefix, x), suffixes)
+        append!(result, merged_itemsets)
     end
-    if length(pool)>1
-        prefix = pool[1][1:end-1]
-        suffixes = combinations(vcat(map(x->x[end], pool)),2)
-        append!(result, sort(map(x->vcat(prefix,sort(x)), suffixes)))
-    end
+    # for itemset in itemsets[2:end]
+    #     if (itemset[1:end-1] != pool[1][1:end-1])
+    #         prefix = pool[1][1:end-1]
+    #         suffixes = combinations(vcat(map(x->x[end], pool)),2)
+    #         append!(result, sort(map(x->vcat(prefix,sort(x)), suffixes)))
+    #         pool = []
+    #     end
+    #     push!(pool, itemset)
+    # end
+    # if length(pool)>1
+    #     prefix = pool[1][1:end-1]
+    #     suffixes = combinations(vcat(map(x->x[end], pool)),2)
+    #     append!(result, sort(map(x->vcat(prefix,sort(x)), suffixes)))
+    # end
     return(result)
 end
 

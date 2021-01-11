@@ -10,5 +10,6 @@ itemsets = [itemset1, itemset2, itemset3, itemset4, itemset5]
 
 test_merge4 = merge_vectors(itemsets)
 test_merge5 = merge_vectors(test_merge4)
-
-df = dummy_dataset_biased(10,10, ['a'], ['b'], 0.5, 1)
+print(test_merge4)
+print(test_merge5)
+# df = dummy_dataset_biased(10,10, ['a'], ['b'], 0.5, 1)
