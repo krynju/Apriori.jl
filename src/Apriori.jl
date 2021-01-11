@@ -192,13 +192,28 @@ function dummy_dataset(attrs, rows)
 end
 
 # Creates a semi-random dataset that exhibits a strong association rule
-function dummy_dataset_biased(attrs, rows, antecedent, consequent, support, confidence)
+function dummy_dataset_biased(attrs, rows, antecedent, consequent, support)
     @assert attrs <= 26 "TODO the attr label fun to generate more"
     attr_names = collect('a':'z')[1:attrs]
     df = DataFrame([Symbol(i) => rand(Bool, rows) for i in attr_names])
-    consequent_occurances = rows*support
-    antecedent_occurances = rows*support
-    return (df[1])
+    print(df)
+    antecedent_indices = findall(col_name->col_name in antecedent, attr_names)
+    consequent_indices = findall(col_name->col_name in consequent, attr_names)
+    antecedent_count = nrow(filter(row->all([row[index] for index in antecedent_indices]), df))
+    rule_count = nrow(filter(row->all([row[index] for index in vcat(antecedent_indices, consequent_indices)]), df))
+    required_rule_count = rows*support
+    for row in eachrow(df)
+        if !all([row[index] for index in vcat(antecedent_indices, consequent_indices)])
+            for index in vcat(antecedent_indices, consequent_indices)
+                row[index] = true
+            end
+            rule_count = rule_count + 1
+        end
+        if rule_count>=required_rule_count
+            break
+        end
+    end
+    return (df)
 end
 
 export apriori, dummy_dataset, dummy_dataset_biased, apriori_rule_gen, apriori_rule_gen2, apriori_frequent_itemsets, merge_vectors
