@@ -5,9 +5,16 @@
 All examples presented below assume initial itemset Z = {abcdefghij}.
 Initial consequent candidates are denoted as Y_0.
 Itemset X is a parameter for all constraints.
-In all presented examples X = {abij}
+In all presented examples X = {abij}.
 
-Since all constraints can be implemented by modifying the starting conditions of the algorithm, the examples present the content of Y_0
+Since all constraints can be implemented by modifying the starting conditions of the algorithm, the examples present the content of Y_0.
+
+For the sake of simplicity, in general case, before proceeding with the algorithm, the set X is processed.
++ If the constraint is "antecedent/consequent in X", the set X is reduced to only contain elements from set Z 
+```X = X ∪ Z```
++ If the constraint is "X in antecedent/consequent", it is necessary to check whether all of the elements of X are in set Z.
+If not, no association rules can be derived from initial itemset Z.
+```if |X-Z|==0 (continue algorithm) else (return empty)```
 
 ### X in antecedent
 Initiating consequent candidates only with elements that do not belong to set X will ensure that all of the elements from set X will remain as antecedent.
