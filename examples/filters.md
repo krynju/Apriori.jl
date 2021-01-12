@@ -39,6 +39,7 @@ Initiating consequent candidates only with elements that belong to X will ensure
 ```Y_0 = {X} = {a,b,i,j}```
 
 ## Implementing multiple constraints
+
 As mentioned in previous section, constraints can be implemented by modifying starting conditions (i.e. consequent candidates set) with 2 methods
 + adding a prefix to each constrain candidate
 + limiting the initial consequent candidate set
@@ -47,3 +48,8 @@ Those methods can be used together.
 For constraints that require filtering the initial candidate set, the filters can be applied in series.
 After the filters have removed some elements from Y_0, prefixes can be joined and appended to each element.
 
+### Processing of set X
+In case of multiple constraints, additional checks must be performed before continuing the algorithm.
+
++ If "X1 in antecedent" and "X2 in consequent" constraints are active, it is necessary to check whether those sets have any common items.
+If they do, no rules can be found.
