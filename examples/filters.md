@@ -11,7 +11,7 @@ Since all constraints can be implemented by modifying the starting conditions of
 
 For the sake of simplicity, in general case, before proceeding with the algorithm, the set X is processed.
 + If the constraint is "antecedent/consequent in X", the set X is reduced to only contain elements from set Z 
-```X = X ∪ Z```
+```X = X ⋂ Z```
 + If the constraint is "X in antecedent/consequent", it is necessary to check whether all of the elements of X are in set Z.
 If not, no association rules can be derived from initial itemset Z.
 ```if |X-Z|==0 (continue algorithm) else (return empty)```
