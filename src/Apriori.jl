@@ -37,7 +37,7 @@ function antecedent(fvec, vec)
 end
 
 function subset_iteration(infrequent_itemsets, set) 
-    for i in subsets(set) 
+    for i in subsets(set)  # TODO , subsets(set,length(set))
         if (i in infrequent_itemsets) 
             return false 
         end 
@@ -85,7 +85,7 @@ function apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
         if (length(freq_itemsets_w_supp) <= 1) break end
 
         itemsets = filter(x -> subset_iteration(infrequent_itemsets, x), gen_new_itemsets(freq_itemsets_w_supp)) 
-        # add special filters here
+        # TODO infrequent itemsets should be only of n-1 length in the line above, so postpone mergning in the union of line 83 to after this line
     end
 
     freq_itemsets
