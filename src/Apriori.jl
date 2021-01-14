@@ -68,6 +68,7 @@ function apriori(
 end
 
 function apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
+    # TODO Add support for containing an empty itemset
     supp = floor(min_relative_support * nrow(data))
 
     freq_itemsets = Array{Pair{Set{Symbol},Int64},1}()
