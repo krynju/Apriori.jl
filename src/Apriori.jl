@@ -3,6 +3,7 @@ module Apriori
 using DataFrames
 using Combinatorics
 
+ATTRIBUTE_TYPE = Int32
 
 function apriori(
     data::DataFrame, 
@@ -36,11 +37,11 @@ end
 function __apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
     supp = floor(min_relative_support * nrow(data))
 
-    frequent_itemsets = Vector{Pair{Vector{Int32},Int64}}()
+    frequent_itemsets = Vector{Pair{Vector{ATTRIBUTE_TYPE},Int64}}()
     attributes = propertynames(data)
 
-    itemsets = [Vector{Int32}([i]) for i in 1:length(attributes)]
-    infrequents = Set{Vector{Int32}}()
+    itemsets = [Vector{ATTRIBUTE_TYPE}([i]) for i in 1:length(attributes)]
+    infrequents = Set{Vector{ATTRIBUTE_TYPE}}()
 
     while true
         itesmets_w_support = map(x -> x => support(data, x), itemsets)
@@ -84,7 +85,7 @@ function apriori_rule_gen(
     ) where {supp_int <: Signed}
 
     symbol2index = Dict([x => y for (x, y) in zip(attribute_names, 1:length(attribute_names))])
-    frequent_itemsets = map(x -> sort(Vector{Int32}(getindex.(Ref(symbol2index), x[1]))) => x[2], frequent_itemsets)
+    frequent_itemsets = map(x -> sort(Vector{ATTRIBUTE_TYPE}(getindex.(Ref(symbol2index), x[1]))) => x[2], frequent_itemsets)
 
     filters = __prepare_filters(symbol2index, X_in_antecedent, antecedent_in_X, X_in_consequent, consequent_in_X)
 
@@ -93,14 +94,14 @@ function apriori_rule_gen(
 end
 
 function __apriori_rule_gen(
-    frequent_itemsets::Vector{Pair{Vector{Int32},supp_int}}, 
+    frequent_itemsets::Vector{Pair{Vector{ATTRIBUTE_TYPE},supp_int}}, 
     min_confidence=0.3,
     filters=Dict()
     ) where {supp_int <: Signed}
 
     df = Dict(frequent_itemsets)
 
-    all_strong_rules = Vector{Pair{Tuple{Vector{Int32},Vector{Int32}},Float64}}()
+    all_strong_rules = Vector{Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Float64}}()
 
     for (Z_set, Z_sup) in frequent_itemsets
         if (length(Z_set) == 1) continue end
@@ -112,13 +113,13 @@ function __apriori_rule_gen(
         if (haskey(filters, :x_in_ant)) 
             X = filters[:x_in_ant]
             if (all(X .∈ (Z,)))
-                Y = filter(x -> x[1] ∉ X, Y)
+                Y = filter(x -> x[end] ∉ X, Y)
             else continue end
         end
 
         if (haskey(filters, :con_in_x)) 
             X = filters[:con_in_x]
-            Y = filter(x -> x[1] ∈ X, Y)
+            Y = filter(x -> x[end] ∈ X, Y)
         end
 
         if (haskey(filters, :ant_in_x)) 
@@ -127,11 +128,14 @@ function __apriori_rule_gen(
             ZmX = filter(x -> x ∉ X, Z)
             if (length(ZmX) > 0 && length(X) > 0)
                 sp = ((X, ZmX) => Z_sup / df[X])
-                if (sp[2] >= min_confidence)
+                if (sp[2] >= min_confidence && 
+                    (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && #ghetto fix na inne filtry żeby obejmowały te wyjątki, ale nadal są powtórzenia wśród tych special cases
+                    (!haskey(filters, :con_in_x) || all(sp[1][2] .∈ (filters[:con_in_x],))) && 
+                    (!haskey(filters, :x_in_con) || all(filters[:x_in_con] .∈ (sp[1][2],))))
                     append!(all_strong_rules,  [sp])
                 end 
             end
-            Y = filter(x -> x[1] ∈ X, Y)
+            Y = filter(x -> x[end] ∈ X, Y)
             Y = map(x -> vcat(ZmX, x), Y)
         end
 
@@ -140,17 +144,24 @@ function __apriori_rule_gen(
             if (all(X .∈ (Z,))) # czy wszystkie elementy X są w Z
                 ZmX = filter(x -> x ∉ X, Z)
                 if (length(ZmX) > 0)
-                    sp = (ZmX, X) => Z_sup / df[ZmX]
-                    if (sp[2] >= min_confidence)
+                    sp = (ZmX, X) => Z_sup / df[ZmX] 
+                    if (sp[2] >= min_confidence && 
+                        (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && 
+                        (!haskey(filters, :con_in_x) || all(sp[1][2] .∈ (filters[:con_in_x],))) && 
+                        (!haskey(filters, :x_in_con) || all(sp[1][1] .∈ (filters[:ant_in_x],))))
                         append!(all_strong_rules, [sp])
                     end
                 end
-                Y = filter(x -> x[1] ∉ X, Y)
+                Y = filter(x -> x[end] ∉ X, Y)
                 Y = map(x -> vcat(X, x), Y)
             else continue end
         end
 
-        if (length(Y) > 0 && length(Y[1]) < length(Z))
+        if (haskey(filters, :ant_in_x) && haskey(filters, :x_in_con))
+            Y = map(unique, Y)
+        end
+
+        if (length(Y) > 0 &&  all(length.(Y) .< length(Z)))
             i = length(Y[1])
             while true
                 strong_rules = filter(x -> x[2] >= min_confidence, map(x -> begin
@@ -189,14 +200,14 @@ function merge_vectors(itemsets::Vector{Vector{idx_int}}) where idx_int <: Signe
 end
 
 function translate_itemset(element, dict)
-    Vector{Int32}(getindex.(Ref(dict), element))
+    Vector{ATTRIBUTE_TYPE}(getindex.(Ref(dict), element))
 end
 
 function translate_rule(rule, dict)
     (getindex.(Ref(dict), rule[1][1]), getindex.(Ref(dict), rule[1][2])) => rule[2] 
 end
 
-function support(data::DataFrame, attrs::Vector{Int32})
+function support(data::DataFrame, attrs::Vector{ATTRIBUTE_TYPE})
     nrow(data[reduce((x, y) -> x .& y, [data[!, attr] .== true for attr in attrs]),:])
 end
 
