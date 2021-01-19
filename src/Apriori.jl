@@ -4,24 +4,6 @@ using DataFrames
 using Combinatorics
 
 
-
-
-# calculates the support of an itemset
-function count_support(data::DataFrame, attrs::Vector{Int32})
-    attrs => nrow(data[reduce((x, y) -> x .& y, [data[!, attr] .== true for attr in attrs]),:])
-end
-
-
-function subsets(vec::Vector{idx_int}, len)where idx_int <: Signed
-    Vector.(combinations([vec...], len))
-end
-
-function antecedent(fvec, vec)
-    filter(x -> x ∉ vec, fvec)
-end
-
-
-
 function apriori(
     data::DataFrame, 
     min_relative_support=0.2, 
@@ -52,7 +34,6 @@ function apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
 end
 
 function __apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
-    # TODO Add support for containing an empty itemset
     supp = floor(min_relative_support * nrow(data))
 
     frequent_itemsets = Vector{Pair{Vector{Int32},Int64}}()
@@ -62,44 +43,17 @@ function __apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
     infrequents = Set{Vector{Int32}}()
 
     while true
-        itesmets_w_support = map(x -> count_support(data, x), itemsets)
-        frequent_itesmets_w_support = filter(x -> x[2] >= supp, itesmets_w_support)
+        itesmets_w_support = map(x -> x => support(data, x), itemsets)
+        frequent_itesmets_w_support = filter(x -> x[2] > supp, itesmets_w_support)
         append!(frequent_itemsets, frequent_itesmets_w_support)
         
         if (length(frequent_itesmets_w_support) <= 1) break end
 
         itemsets = filter(x -> !any(subsets(x, length(x) - 1) .∈ (infrequents,)), merge_vectors(map(x -> x[1], frequent_itesmets_w_support))) 
-        infrequents = Set(map(y -> y[1], filter(x -> x[2] < supp, itesmets_w_support)))
+        infrequents = map(y -> y[1], filter(x -> x[2] <= supp, itesmets_w_support))
     end
     
     frequent_itemsets
-end
-
-function merge_vectors(itemsets::Vector{Vector{idx_int}}) where idx_int <: Signed
-    result = Vector{Vector{idx_int}}()
-    for i in 1:length(itemsets)
-        itemset1 = itemsets[i]
-        prefix = itemset1[1:end - 1]
-        suffixes = []
-        for j in i + 1:length(itemsets)
-            itemset2 = itemsets[j]
-            if prefix != itemset2[1:end - 1]
-                break
-            end
-            push!(suffixes, sort([itemset1[end], itemset2[end]]))
-        end
-        merged_itemsets = map(x -> vcat(prefix, x), sort(suffixes))
-        append!(result, merged_itemsets)
-    end
-    result
-end
-
-function translate_itemset(element, dict)
-    Vector{Int32}(getindex.(Ref(dict), element))
-end
-
-function translate_rule(rule, dict)
-    (getindex.(Ref(dict), rule[1][1]), getindex.(Ref(dict), rule[1][2])) => rule[2] 
 end
 
 function __prepare_filters(translate_dict,
@@ -215,7 +169,44 @@ function __apriori_rule_gen(
     all_strong_rules
 end
 
+function merge_vectors(itemsets::Vector{Vector{idx_int}}) where idx_int <: Signed
+    result = Vector{Vector{idx_int}}()
+    for i in 1:length(itemsets)
+        itemset1 = itemsets[i]
+        prefix = itemset1[1:end - 1]
+        suffixes = []
+        for j in i + 1:length(itemsets)
+            itemset2 = itemsets[j]
+            if prefix != itemset2[1:end - 1]
+                break
+            end
+            push!(suffixes, sort([itemset1[end], itemset2[end]]))
+        end
+        merged_itemsets = map(x -> vcat(prefix, x), sort(suffixes))
+        append!(result, merged_itemsets)
+    end
+    result
+end
 
+function translate_itemset(element, dict)
+    Vector{Int32}(getindex.(Ref(dict), element))
+end
+
+function translate_rule(rule, dict)
+    (getindex.(Ref(dict), rule[1][1]), getindex.(Ref(dict), rule[1][2])) => rule[2] 
+end
+
+function support(data::DataFrame, attrs::Vector{Int32})
+    nrow(data[reduce((x, y) -> x .& y, [data[!, attr] .== true for attr in attrs]),:])
+end
+
+function subsets(vec::Vector{idx_int}, len)where idx_int <: Signed
+    Vector.(combinations([vec...], len))
+end
+
+function antecedent(fvec, vec)
+    filter(x -> x ∉ vec, fvec)
+end
 
 function dummy_dataset(attrs, rows)
     @assert attrs <= 26 "TODO the attr label fun to generate more"
@@ -248,6 +239,6 @@ function dummy_dataset_biased(attrs, rows, antecedent, consequent, support)
     return df
 end
 
-export apriori, dummy_dataset, dummy_dataset_biased, apriori_rule_gen, apriori_rule_gen2, apriori_frequent_itemsets, merge_vectors
+export apriori, dummy_dataset, dummy_dataset_biased, apriori_rule_gen, apriori_frequent_itemsets, merge_vectors
 
 end
