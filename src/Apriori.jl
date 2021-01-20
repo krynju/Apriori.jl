@@ -2,6 +2,7 @@ module Apriori
 
 using DataFrames
 using Combinatorics
+using CSV
 
 ATTRIBUTE_TYPE = Int32
 
@@ -13,11 +14,11 @@ function apriori(
     antecedent_in_X=Vector{Symbol}()::Vector{Symbol},
     X_in_consequent=Vector{Symbol}()::Vector{Symbol},
     consequent_in_X=Vector{Symbol}()::Vector{Symbol},
-    )::Vector{Pair{Tuple{Vector{Symbol},Vector{Symbol}},Float64}}
+    )::Vector{Pair{Tuple{Vector{Symbol},Vector{Symbol}},Tuple{Float64,Float64}}}
 
     attributes = propertynames(data)::Array{Symbol,1}
 
-    symbol2index = Dict([x => y for (x, y) in zip(attributes, one(ATTRIBUTE_TYPE):convert(ATTRIBUTE_TYPE,length(attributes)))])
+    symbol2index = Dict([x => y for (x, y) in zip(attributes, one(ATTRIBUTE_TYPE):convert(ATTRIBUTE_TYPE, length(attributes)))])
 
     filters = __prepare_filters(symbol2index, X_in_antecedent, antecedent_in_X, X_in_consequent, consequent_in_X)
 
@@ -37,8 +38,8 @@ end
 function __apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)::Vector{Pair{Vector{ATTRIBUTE_TYPE},Int64}}
     supp = floor(min_relative_support * nrow(data))
 
-    frequent_itemsets = Vector{Pair{Vector{ATTRIBUTE_TYPE},Int64}}()
-
+    frequent_itemsets = Vector{Pair{Vector{ATTRIBUTE_TYPE},Int64}}([[]=>nrow(data)])
+    
     itemsets = [Vector{ATTRIBUTE_TYPE}([i]) for i in 1:ncol(data)]
     infrequents = Set{Vector{ATTRIBUTE_TYPE}}()
 
@@ -85,7 +86,7 @@ function apriori_rule_gen(
     consequent_in_X=Vector{Symbol}()::Vector{Symbol},
     ) where {supp_int <: Signed}
 
-    symbol2index = Dict([x => convert(ATTRIBUTE_TYPE,y) for (x, y) in zip(attribute_names, 1:length(attribute_names))])
+    symbol2index = Dict([x => convert(ATTRIBUTE_TYPE, y) for (x, y) in zip(attribute_names, 1:length(attribute_names))])
     frequent_itemsets = map(x -> sort(Vector{ATTRIBUTE_TYPE}(getindex.(Ref(symbol2index), x[1]))) => x[2], frequent_itemsets)
 
     filters = __prepare_filters(symbol2index, X_in_antecedent, antecedent_in_X, X_in_consequent, consequent_in_X)
@@ -103,10 +104,12 @@ function __apriori_rule_gen(
 
     df = Dict(frequent_itemsets)
 
-    all_strong_rules = Vector{Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Float64}}()
+    dataset_size = df[[]]
+
+    all_strong_rules = Vector{Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Tuple{Float64,Float64}}}()
 
     for (Z_set, Z_sup) in frequent_itemsets
-        if (length(Z_set) == 1) continue end
+        #if (length(Z_set) == 1) continue end
 
         Z = Z_set
         i = 1
@@ -129,9 +132,9 @@ function __apriori_rule_gen(
             X = filter(x -> x[1] ∈ Z, X)
             ZmX = filter(x -> x ∉ X, Z)
             if (length(ZmX) > 0 && length(X) > 0)
-                sp = ((X, ZmX) => Z_sup / df[X])
-                if (sp[2] >= min_confidence && 
-                    (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && #ghetto fix na inne filtry żeby obejmowały te wyjątki, ale nadal są powtórzenia wśród tych special cases
+                sp = ((X, ZmX) => (Z_sup/dataset_size, Z_sup / df[X]))
+                if (sp[2][2] >= min_confidence && 
+                    (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && # ghetto fix na inne filtry żeby obejmowały te wyjątki, ale nadal są powtórzenia wśród tych special cases
                     (!haskey(filters, :con_in_x) || all(sp[1][2] .∈ (filters[:con_in_x],))) && 
                     (!haskey(filters, :x_in_con) || all(filters[:x_in_con] .∈ (sp[1][2],))) &&
                     sp ∉ all_strong_rules)
@@ -147,9 +150,9 @@ function __apriori_rule_gen(
             if (all(X .∈ (Z,))) # czy wszystkie elementy X są w Z
                 ZmX = filter(x -> x ∉ X, Z)
                 if (length(ZmX) > 0)
-                    sp = (ZmX, X) => Z_sup / df[ZmX] 
-                    if (sp[2] >= min_confidence && 
-                        (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && #ghetto solution
+                    sp = (ZmX, X) => (Z_sup/dataset_size, Z_sup / df[ZmX] )
+                    if (sp[2][2] >= min_confidence && 
+                        (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && # ghetto solution
                         (!haskey(filters, :con_in_x) || all(sp[1][2] .∈ (filters[:con_in_x],))) && 
                         (!haskey(filters, :ant_in_x) || all(sp[1][1] .∈ (filters[:ant_in_x],))) &&
                         sp ∉ all_strong_rules)
@@ -164,20 +167,20 @@ function __apriori_rule_gen(
         if (length(Y) > 0 &&  all(length.(Y) .< length(Z)))
             i = length(Y[1])
             while true
-                strong_rules = filter(x -> x[2] >= min_confidence, map(x -> begin
+                strong_rules = filter(x -> x[2][2] >= min_confidence, map(x -> begin
                     ant = antecedent(Z, x)
-                    (ant, x) => Z_sup / df[ant] 
+                    (ant, x) => (Z_sup/dataset_size, Z_sup / df[ant] )
                 end, Y))
                 
                 append!(all_strong_rules, strong_rules)
                 i += 1
-                if (i == length(Z_set) || length(strong_rules) == 0) break end
+                if (i > length(Z_set) || length(strong_rules) == 0) break end
                 
                 Y = merge_vectors(map(x -> x[1][2], strong_rules))
             end
         end
     end
-    all_strong_rules::Vector{Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Float64}}
+    all_strong_rules::Vector{Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Tuple{Float64,Float64}}}
 end
 
 function merge_vectors(itemsets::Vector{Vector{ATTRIBUTE_TYPE}}) 
@@ -200,11 +203,11 @@ function merge_vectors(itemsets::Vector{Vector{ATTRIBUTE_TYPE}})
     result::Vector{Vector{ATTRIBUTE_TYPE}}
 end
 
-function translate_itemset(element::Vector{Symbol}, dict::Dict{Symbol, ATTRIBUTE_TYPE})
+function translate_itemset(element::Vector{Symbol}, dict::Dict{Symbol,ATTRIBUTE_TYPE})
     Vector{ATTRIBUTE_TYPE}(getindex.(Ref(dict), element))
 end
 
-function translate_rule(rule::Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Float64}, dict::Vector{Symbol})
+function translate_rule(rule::Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Tuple{Float64,Float64}}, dict::Vector{Symbol})
     (getindex.(Ref(dict), rule[1][1]), getindex.(Ref(dict), rule[1][2])) => rule[2] 
 end
 
@@ -257,6 +260,16 @@ function dummy_dataset_biased(attrs, rows, relative_sup, antecedent, consequent,
     return df
 end
 
-export apriori, dummy_dataset, dummy_dataset_biased, apriori_rule_gen, apriori_frequent_itemsets, merge_vectors
+function mushroom_dataset()
+    download("https://gist.githubusercontent.com/krynju/120e623b7b0277e45126baf8aa39edad/raw/f980a374b787cd7e539e821450e4de91f948b5fd/mushroom.csv", "mushroom.csv")
+    d = CSV.read("mushroom.csv", DataFrame)
+    select!(d, [(atr => (x -> (;[Symbol(atr * "=" * string(value)) => d[!,atr] .== value for value in unique(d[!,atr])]...)) => AsTable)  for atr in names(d)])
+end
+
+function pretty(rules::Vector{Pair{Tuple{Vector{Symbol},Vector{Symbol}},Tuple{Float64,Float64}}})
+    DataFrame([(antecedent=join(r[1][1],", "), consequent=join(r[1][2],", "), support=r[2][1], confidence=r[2][2])  for r in rules])
+end
+
+export apriori, dummy_dataset, dummy_dataset_biased, apriori_rule_gen, apriori_frequent_itemsets, merge_vectors, mushroom_dataset, pretty
 
 end

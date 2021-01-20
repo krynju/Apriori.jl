@@ -14,7 +14,7 @@ using Random
         @test true
         Random.seed!(2137) # jak raz ustawisz seed i potem chccesz jakiś test losowy to zmień na np. random.seed(current_time)
         d = dummy_dataset(20, 100)
-        @test 370 == length(apriori(d))
+        @test 397 == length(apriori(d))
     end
     
     # ale nie musisz w tych blokach let/end pisać, możesz zrobić jakiś tu globalny d i sprawdzać wieloma @test
