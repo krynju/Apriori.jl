@@ -11,18 +11,12 @@ using Random
     # (Apriori) pkg> test
 
     let  #IZOLOWANY SCOPE, przydatny jak chcesz tych samych zmiennych używać i mieć pewność że nic nie wycieka poza test
-        @test true
-        Random.seed!(2137) # jak raz ustawisz seed i potem chccesz jakiś test losowy to zmień na np. random.seed(current_time)
-        d = dummy_dataset(20, 100)
-        @test 397 == length(apriori(d))
-
         df = dummy_dataset_biased(20,100, 0.3, ['a'], ['b'], 1)
         result = apriori(df, 0.9, 0.9)
         rules = map(x->x[1], result)
         @test ([:b], [:a]) in rules
         @test ([:a], [:b]) in rules
-        @test ([], [:b,:a]) in rules || ([], [:a,:b]) in rules
-
+        
         df = dummy_dataset_biased(20,100, 0.2, ['a', 'b'], ['c','d'], 1, 0.8)
         result = apriori(df, 0.9, 0.9)
         rules = map(x->x[1], result)
