@@ -227,20 +227,26 @@ function dummy_dataset(attrs, rows)
 end
 
 # Creates a semi-random dataset that exhibits a strong association rule
-function dummy_dataset_biased(attrs, rows, antecedent, consequent, support)
+function dummy_dataset_biased(attrs, rows, relative_sup, antecedent, consequent, support, confidence=1)
     @assert attrs <= 26 "TODO the attr label fun to generate more"
     attr_names = collect('a':'z')[1:attrs]
-    df = DataFrame([Symbol(i) => rand(Bool, rows) for i in attr_names])
+    df = DataFrame([Symbol(i) => map(x->x<relative_sup, rand(rows)) for i in attr_names])
     # print(df)
     antecedent_indices = findall(col_name -> col_name in antecedent, attr_names)
     consequent_indices = findall(col_name -> col_name in consequent, attr_names)
     antecedent_count = nrow(filter(row -> all([row[index] for index in antecedent_indices]), df))
     rule_count = nrow(filter(row -> all([row[index] for index in vcat(antecedent_indices, consequent_indices)]), df))
     required_rule_count = rows * support
+    
+    remove_consequent_count = required_rule_count * (1-confidence)
     for row in eachrow(df)
         if !all([row[index] for index in vcat(antecedent_indices, consequent_indices)])
             for index in vcat(antecedent_indices, consequent_indices)
                 row[index] = true
+            end
+            if remove_consequent_count>0
+                row[consequent_indices[1]] = false
+                remove_consequent_count -= 1
             end
             rule_count = rule_count + 1
         end
