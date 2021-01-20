@@ -13,11 +13,11 @@ function apriori(
     antecedent_in_X=Vector{Symbol}()::Vector{Symbol},
     X_in_consequent=Vector{Symbol}()::Vector{Symbol},
     consequent_in_X=Vector{Symbol}()::Vector{Symbol},
-    )
+    )::Vector{Pair{Tuple{Vector{Symbol},Vector{Symbol}},Float64}}
 
     attributes = propertynames(data)::Array{Symbol,1}
 
-    symbol2index = Dict([x => y for (x, y) in zip(attributes, 1:length(attributes))])
+    symbol2index = Dict([x => y for (x, y) in zip(attributes, one(ATTRIBUTE_TYPE):convert(ATTRIBUTE_TYPE,length(attributes)))])
 
     filters = __prepare_filters(symbol2index, X_in_antecedent, antecedent_in_X, X_in_consequent, consequent_in_X)
 
@@ -30,17 +30,16 @@ end
 function apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
     attributes = propertynames(data)
     freq_itemsets = __apriori_frequent_itemsets(data, min_relative_support)
-    symbol2index = Dict([x => y for (x, y) in zip(attributes, 1:length(attributes))])
+    symbol2index = Dict([x => y for (x, y) in zip(attributes, 1:ncol(data))])
     frequent_itemsets = map(x -> Set{Symbol}(getindex.(Ref(attributes), x[1])) => x[2], freq_itemsets)
 end
 
-function __apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)
+function __apriori_frequent_itemsets(data::DataFrame, min_relative_support=0.2)::Vector{Pair{Vector{ATTRIBUTE_TYPE},Int64}}
     supp = floor(min_relative_support * nrow(data))
 
     frequent_itemsets = Vector{Pair{Vector{ATTRIBUTE_TYPE},Int64}}()
-    attributes = propertynames(data)
 
-    itemsets = [Vector{ATTRIBUTE_TYPE}([i]) for i in 1:length(attributes)]
+    itemsets = [Vector{ATTRIBUTE_TYPE}([i]) for i in 1:ncol(data)]
     infrequents = Set{Vector{ATTRIBUTE_TYPE}}()
 
     while true
@@ -71,6 +70,8 @@ function __prepare_filters(translate_dict,
         :con_in_x => consequent_in_X
     ]
 
+    @assert all(X_in_antecedent .∉ (X_in_consequent,))
+
     filters = Dict(filter(x -> length(x[2]) > 0, map(x -> x[1] => sort(translate_itemset(x[2], translate_dict)), t)))
 end
 
@@ -84,13 +85,14 @@ function apriori_rule_gen(
     consequent_in_X=Vector{Symbol}()::Vector{Symbol},
     ) where {supp_int <: Signed}
 
-    symbol2index = Dict([x => y for (x, y) in zip(attribute_names, 1:length(attribute_names))])
+    symbol2index = Dict([x => convert(ATTRIBUTE_TYPE,y) for (x, y) in zip(attribute_names, 1:length(attribute_names))])
     frequent_itemsets = map(x -> sort(Vector{ATTRIBUTE_TYPE}(getindex.(Ref(symbol2index), x[1]))) => x[2], frequent_itemsets)
 
     filters = __prepare_filters(symbol2index, X_in_antecedent, antecedent_in_X, X_in_consequent, consequent_in_X)
 
     rules = __apriori_rule_gen(frequent_itemsets, min_confidence, filters)
-    map(x -> translate_rule(x, attribute_names), rules)
+    result = map(x -> translate_rule(x, attribute_names), rules)
+    result::Vector{Pair{Tuple{Vector{Symbol},Vector{Symbol}},Float64}}
 end
 
 function __apriori_rule_gen(
@@ -131,7 +133,8 @@ function __apriori_rule_gen(
                 if (sp[2] >= min_confidence && 
                     (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && #ghetto fix na inne filtry żeby obejmowały te wyjątki, ale nadal są powtórzenia wśród tych special cases
                     (!haskey(filters, :con_in_x) || all(sp[1][2] .∈ (filters[:con_in_x],))) && 
-                    (!haskey(filters, :x_in_con) || all(filters[:x_in_con] .∈ (sp[1][2],))))
+                    (!haskey(filters, :x_in_con) || all(filters[:x_in_con] .∈ (sp[1][2],))) &&
+                    sp ∉ all_strong_rules)
                     append!(all_strong_rules,  [sp])
                 end 
             end
@@ -146,19 +149,16 @@ function __apriori_rule_gen(
                 if (length(ZmX) > 0)
                     sp = (ZmX, X) => Z_sup / df[ZmX] 
                     if (sp[2] >= min_confidence && 
-                        (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && 
+                        (!haskey(filters, :x_in_ant) || all(filters[:x_in_ant] .∈ (sp[1][1],))) && #ghetto solution
                         (!haskey(filters, :con_in_x) || all(sp[1][2] .∈ (filters[:con_in_x],))) && 
-                        (!haskey(filters, :x_in_con) || all(sp[1][1] .∈ (filters[:ant_in_x],))))
+                        (!haskey(filters, :ant_in_x) || all(sp[1][1] .∈ (filters[:ant_in_x],))) &&
+                        sp ∉ all_strong_rules)
                         append!(all_strong_rules, [sp])
                     end
                 end
                 Y = filter(x -> x[end] ∉ X, Y)
                 Y = map(x -> vcat(X, x), Y)
             else continue end
-        end
-
-        if (haskey(filters, :ant_in_x) && haskey(filters, :x_in_con))
-            Y = map(unique, Y)
         end
 
         if (length(Y) > 0 &&  all(length.(Y) .< length(Z)))
@@ -177,16 +177,17 @@ function __apriori_rule_gen(
             end
         end
     end
-    all_strong_rules
+    all_strong_rules::Vector{Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Float64}}
 end
 
-function merge_vectors(itemsets::Vector{Vector{idx_int}}) where idx_int <: Signed
-    result = Vector{Vector{idx_int}}()
-    for i in 1:length(itemsets)
+function merge_vectors(itemsets::Vector{Vector{ATTRIBUTE_TYPE}}) 
+    result = Vector{Vector{ATTRIBUTE_TYPE}}()
+    itemsets_len = length(itemsets)::Int64
+    for i in 1:itemsets_len
         itemset1 = itemsets[i]
         prefix = itemset1[1:end - 1]
-        suffixes = []
-        for j in i + 1:length(itemsets)
+        suffixes = Vector{Vector{ATTRIBUTE_TYPE}}()
+        for j in i + 1:itemsets_len
             itemset2 = itemsets[j]
             if prefix != itemset2[1:end - 1]
                 break
@@ -196,14 +197,14 @@ function merge_vectors(itemsets::Vector{Vector{idx_int}}) where idx_int <: Signe
         merged_itemsets = map(x -> vcat(prefix, x), sort(suffixes))
         append!(result, merged_itemsets)
     end
-    result
+    result::Vector{Vector{ATTRIBUTE_TYPE}}
 end
 
-function translate_itemset(element, dict)
+function translate_itemset(element::Vector{Symbol}, dict::Dict{Symbol, ATTRIBUTE_TYPE})
     Vector{ATTRIBUTE_TYPE}(getindex.(Ref(dict), element))
 end
 
-function translate_rule(rule, dict)
+function translate_rule(rule::Pair{Tuple{Vector{ATTRIBUTE_TYPE},Vector{ATTRIBUTE_TYPE}},Float64}, dict::Vector{Symbol})
     (getindex.(Ref(dict), rule[1][1]), getindex.(Ref(dict), rule[1][2])) => rule[2] 
 end
 
@@ -211,7 +212,7 @@ function support(data::DataFrame, attrs::Vector{ATTRIBUTE_TYPE})
     nrow(data[reduce((x, y) -> x .& y, [data[!, attr] .== true for attr in attrs]),:])
 end
 
-function subsets(vec::Vector{idx_int}, len)where idx_int <: Signed
+function subsets(vec::Vector{ATTRIBUTE_TYPE}, len)
     Vector.(combinations([vec...], len))
 end
 
