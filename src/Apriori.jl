@@ -174,7 +174,7 @@ function __apriori_rule_gen(
                 
                 append!(all_strong_rules, strong_rules)
                 i += 1
-                if (i > length(Z_set) || length(strong_rules) == 0) break end
+                if (i == length(Z_set) || length(strong_rules) == 0) break end
                 
                 Y = merge_vectors(map(x -> x[1][2], strong_rules))
             end
